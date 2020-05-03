@@ -2,6 +2,16 @@
 # PowerShell script to look through current Elite Dangerous 'Journal' files
 # and account apparent playtime.
 ###########################################################################
+Param(
+	[switch]$verbose = $false,
+	[switch]$debug = $false
+)
+if ($verbose) {
+	$VerbosePreference = "Continue"
+}
+if ($debug) {
+	$DebugPreference = "Continue"
+}
 
 ###########################################################################
 # C# code to interpret 'shell:' style paths, pared down to only SavedGames
@@ -61,7 +71,7 @@ $parse_timestamp = {
 # Filter to 'start of session' events
 ###########################################################################
 $filter_start_session = {
-	Write-Debug "filter_start_session: _ = $_"
+	#Write-Debug "filter_start_session: _ = $_"
 	if ($_.event -eq "Location") {
 		return $true
 	}
@@ -73,7 +83,7 @@ $filter_start_session = {
 # Filter to 'end of session' events
 ###########################################################################
 $filter_end_session = {
-	Write-Debug "filter_end_session: _ = $_"
+	#Write-Debug "filter_end_session: _ = $_"
 	if ($_.event -eq "Shutdown") {
 		Write-Debug "Found Shutdown"
 		return $true
@@ -104,7 +114,7 @@ $parse_journal = {
 		if ($starttime) {
 			Write-Verbose "start: $starttime"
 			Write-Debug "Looking for endtime..."
-			$endtime = Get-Content -Path "$JournalFolder\$infile" | ConvertFrom-Json | Where-Object {&$filter_end_session} | &$parse_timestamp
+			$endtime = Get-Content -Path "$JournalFolder\$infile" | ConvertFrom-Json | Where-Object {&$filter_end_session} | Select-Object -First 1 | &$parse_timestamp
 			Write-Verbose "end: $endtime"
 			$diff = $endtime - $starttime
 			Write-Verbose "diff: $diff"
@@ -123,8 +133,6 @@ $parse_journal = {
 ###########################################################################
 # MAIN code
 ###########################################################################
-$VerbosePreference = "Continue"
-$DebugPreference = "Continue"
 $total_playedtime = 0
 $SavedGames = [shell32]::GetKnownFolderPath([KnownFolder]::SavedGames)
 $JournalFolder = "$SavedGames\Frontier Developments\Elite Dangerous"
