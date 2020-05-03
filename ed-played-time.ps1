@@ -52,7 +52,7 @@ Add-Type @"
 # Record the end of a session
 ###########################################################################
 $end_session = {
-	Write-Debug "end_sessions START: started = $script:started, ended = $script:ended"
+	Write-Debug "end_sessions: started = $script:started, ended = $script:ended"
 	Write-Verbose "start: $script:start_time"
 	Write-Verbose "end: $script:end_time"
 	$diff = $script:end_time - $script:start_time
@@ -65,6 +65,7 @@ $end_session = {
 	}
 	New-Object PSObject -Property $delta | Write-Output
 	$script:started = $script:ended = $false
+	$script:expected_part = 1
 }
 ###########################################################################
 
@@ -85,7 +86,7 @@ $find_sessions = {
 			Write-Debug "Found Location"
 			$script:start_time = [datetime]::Parse($e.timestamp.ToString())
 			$script:started = $true
-			Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+			Write-Debug "find_sessions LOCATION: started = $script:started, ended = $script:ended"
 		}
 	}
 	if ($script:started -and -not $script:ended) {
@@ -94,19 +95,22 @@ $find_sessions = {
 			Write-Debug "Found Shutdown"
 			$script:end_time = [datetime]::Parse($e.timestamp.ToString())
 			$script:ended = $true
-			Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+			Write-Debug "find_sessions SHUTDOWN: started = $script:started, ended = $script:ended"
 		}
-		if ($e.event -eq "Music" -and $_.MusicTrack -eq "MainMenu") {
-			Write-Debug "Found MainMenu Music"
-			$script:end_time = [datetime]::Parse($e.timestamp.ToString())
+		if ($e.event -eq "Commander") {
+		# A Commander event seems to be the first written when logging in.
+		# The event before it *might* be when we exited to the Main Menu
+			Write-Debug "Found Commander event, using last_event"
+			$script:end_time = [datetime]::Parse($script:last_event.timestamp.ToString())
 			$script:ended = $true
-			Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+			Write-Debug "find_sessions COMMANDER: started = $script:started, ended = $script:ended"
 		}
 	}
 	if ($script:started -and $script:ended) {
-		Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+		Write-Debug "find_sessions END: started = $script:started, ended = $script:ended"
 		&$end_session
 	}
+	$script:last_event = $e
 	#Write-Debug "find_sessions END: started = $script:started, ended = $script:ended, e = $e"
 }
 ###########################################################################
@@ -125,22 +129,31 @@ $parse_journal = {
 	)
 	Process {
 		Write-Host "parse_journal $infile"
-		$script:started = $false
-		$script:start_time = $false
-		$script:ended = $false
-		$script:end_time = $false
+		$this_part = [int]$infile.ToString().Split("{.}")[2]
+		Write-Debug "parse_journal: This is part $this_part (expected part $script:expected_part)"
+		if ($this_part -ne $script:expected_part) {
+			Write-Error "parse_journal: Expected part $script:expected_part, found part $this_part"
+			exit
+		}
+		$last_part = $this_part
 		foreach ($line in [System.IO.File]::ReadLines("$JournalFolder\$infile")) {
 			ConvertFrom-Json -InputObject $line | &$find_sessions
+			#Write-Debug "parse_journal: After find_sessions call"
 		}
-		# Put "end of file, but not end of session" check here
+		# End of current file
 		if ($script:started -and -not $script:ended) {
 			Write-Debug "parse_journal START: started = $script:started, ended = $script:ended, last_line = $line"
+			# Are we continuing in a next part?
 			$json = ConvertFrom-Json -InputObject $line
-			$script:end_time = [datetime]::Parse($json.timestamp.ToString())
-			&$end_session
+			if ($json.event -ne "Continued") {
+				Write-Debug "parse_journal: EOF and *not* a Continued"
+				$script:end_time = [datetime]::Parse($json.timestamp.ToString())
+				&$end_session
+			} else {
+				Write-Debug "parse_journal: EOF and Continued in part $($json.part.ToString())"
+				$script:expected_part = [int]$json.part
+			}
 		}
-		# And then also store $script:last_filename here
-		# so we can check if the next one is an increment
 	} 
 }
 ###########################################################################
@@ -151,6 +164,12 @@ $parse_journal = {
 $total_playedtime = 0
 $SavedGames = [shell32]::GetKnownFolderPath([KnownFolder]::SavedGames)
 $JournalFolder = "$SavedGames\Frontier Developments\Elite Dangerous"
+$script:started = $false
+$script:start_time = $false
+$script:ended = $false
+$script:end_time = $false
+$script:expected_part = 1
+$script:last_event
 Get-ChildItem "$JournalFolder" -Filter "Journal.*.*.log" | &$parse_journal | Export-Csv -Path "$JournalFolder\ed-played-time.csv"
 Write-Host "total played: $total_playedtime"
 ###########################################################################
