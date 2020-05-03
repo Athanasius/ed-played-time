@@ -48,9 +48,24 @@ $parse_timestamp = {
 			Mandatory = $true,
 			ValueFromPipeline = $true)
 		]
-		$ts
+		$e
 	)
-	[datetime]::Parse($ts.timestamp.ToString())
+	if ($e) {
+		#Write-Host "parse_timestamp: e = $e"
+		[datetime]::Parse($e.timestamp.ToString())
+	}
+}
+###########################################################################
+
+###########################################################################
+# Filter to 'start of session' events
+###########################################################################
+$filter_start_event = {
+	#Write-Host $_
+	if ($_.event -eq "Location") {
+		return $true
+	}
+	return $false
 }
 ###########################################################################
 
@@ -68,19 +83,22 @@ $parse_journal = {
 	)
 	Process {
 		Write-Host "parse_journal $infile"
-		$starttime = Get-Content -Path "$JournalFolder\$infile" -TotalCount 1 | ConvertFrom-Json | Select-Object -Property timestamp | &$parse_timestamp
-		$endtime = Get-Content -Path "$JournalFolder\$infile" -Tail 1 | ConvertFrom-Json | Select-Object -Property timestamp | &$parse_timestamp
-		Write-Host "start: $starttime"
-		Write-Host "end: $endtime"
-		$diff = $endtime - $starttime
-		Write-Host "diff: $diff"
-		$total_playedtime += $diff
-		Write-Host "total played now: $total_playedtime"
-		$delta = @{
-			TimeStamp = $endtime
-			Played = $diff
+		$starttime = Get-Content -Path "$JournalFolder\$infile" | ConvertFrom-Json | Where-Object { &$filter_start_event $_ }| &$parse_timestamp
+		if ($starttime) {
+			Write-Host "start: $starttime"
+			#Write-Host "Looking for endtime..."
+			$endtime = Get-Content -Path "$JournalFolder\$infile" -Tail 1 | ConvertFrom-Json | &$parse_timestamp
+			Write-Host "end: $endtime"
+			$diff = $endtime - $starttime
+			Write-Host "diff: $diff"
+			$total_playedtime += $diff
+			Write-Host "total played now: $total_playedtime"
+			$delta = @{
+				TimeStamp = $endtime
+				Played = $diff
+			}
+			New-Object PSObject -Property $delta | Write-Output
 		}
-		New-Object PSObject -Property $delta | Write-Output
 	} 
 }
 ###########################################################################
