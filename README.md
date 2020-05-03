@@ -12,3 +12,4 @@ A Windows Power Shell script that attempts to total up Elite Dangerous played ti
     1. The End time found
     1. The time delta this represents
     1. The current running total of time deltas found
+1.  It will also write a file `ed-played-time.csv` in the Journals folder.  This, obviously, is a CSV format file with each line containing the 'end' timestamp and time delta for a session.  This should be easy to import into any spreadsheet for further processing, such as making a graph.

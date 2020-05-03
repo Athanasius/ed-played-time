@@ -76,7 +76,12 @@ $parse_journal = {
 		Write-Host "diff: $diff"
 		$total_playedtime += $diff
 		Write-Host "total played now: $total_playedtime"
-	}
+		$delta = @{
+			TimeStamp = $endtime
+			Played = $diff
+		}
+		New-Object PSObject -Property $delta | Write-Output
+	} 
 }
 ###########################################################################
 
@@ -86,5 +91,5 @@ $parse_journal = {
 $total_playedtime = 0
 $SavedGames = [shell32]::GetKnownFolderPath([KnownFolder]::SavedGames)
 $JournalFolder = "$SavedGames\Frontier Developments\Elite Dangerous"
-Get-ChildItem "$JournalFolder" -Filter "Journal.*.*.log" | &$parse_journal
+Get-ChildItem "$JournalFolder" -Filter "Journal.*.*.log" | &$parse_journal | Export-Csv -Path "$JournalFolder\ed-played-time.csv"
 ###########################################################################
