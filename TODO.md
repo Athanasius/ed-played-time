@@ -11,7 +11,8 @@
 ### Action Items
 1. ~~Output the found data to a CSV file (in the Journals location).~~ **DONE**
 1. ~~Use "Location" event as the start time.~~ **DONE**
-1. Use "Shutdown", "Music" ("MusicTrack":"MainMenu") to detect end of session.
+1. ~~Use "Shutdown", "Music" ("MusicTrack":"MainMenu") to detect end of session.~~ **DONE**
+1. ~~If we reach end of file, treat that as end of a session if we didn't yet see one.~~ **DONE**
 1. If we find a 'logout' event, start looking for a new 'login' event.
 1. If we reach the end of a `NN` Journal check if the next is `NN+1` for the same Journal file name timestamp.
     1. This will need some state machine.  If the new file finds a new 'login' event before a 'logout' one then we need to decide what the end of the prior session was.  At the least we need to store the 'last line' timestamp from the prior file.

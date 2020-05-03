@@ -49,6 +49,26 @@ Add-Type @"
 ###########################################################################
 
 ###########################################################################
+# Record the end of a session
+###########################################################################
+$end_session = {
+	Write-Debug "end_sessions START: started = $script:started, ended = $script:ended"
+	Write-Verbose "start: $script:start_time"
+	Write-Verbose "end: $script:end_time"
+	$diff = $script:end_time - $script:start_time
+	Write-Verbose "diff: $diff"
+	$script:total_playedtime += $diff
+	Write-Verbose "total played now: $script:total_playedtime"
+	$delta = @{
+		TimeStamp = $script:end_time
+		Played = $diff
+	}
+	New-Object PSObject -Property $delta | Write-Output
+	$script:started = $script:ended = $false
+}
+###########################################################################
+
+###########################################################################
 # Filter a single session
 ###########################################################################
 $find_sessions = {
@@ -69,7 +89,7 @@ $find_sessions = {
 		}
 	}
 	if ($script:started -and -not $script:ended) {
-		Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+		#Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
 		if ($e.event -eq "Shutdown") {
 			Write-Debug "Found Shutdown"
 			$script:end_time = [datetime]::Parse($e.timestamp.ToString())
@@ -84,18 +104,8 @@ $find_sessions = {
 		}
 	}
 	if ($script:started -and $script:ended) {
-		Write-Verbose "start: $script:start_time"
-		Write-Verbose "end: $script:end_time"
-		$diff = $script:end_time - $script:start_time
-		Write-Verbose "diff: $diff"
-		$script:total_playedtime += $diff
-		Write-Verbose "total played now: $script:total_playedtime"
-		$delta = @{
-			TimeStamp = $script:end_time
-			Played = $diff
-		}
-		New-Object PSObject -Property $delta | Write-Output
-		$script:started = $script:ended = $false
+		Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+		&$end_session
 	}
 	#Write-Debug "find_sessions END: started = $script:started, ended = $script:ended, e = $e"
 }
@@ -114,7 +124,7 @@ $parse_journal = {
 		$infile
 	)
 	Process {
-		Write-Verbose "parse_journal $infile"
+		Write-Host "parse_journal $infile"
 		$script:started = $false
 		$script:start_time = $false
 		$script:ended = $false
@@ -122,6 +132,15 @@ $parse_journal = {
 		foreach ($line in [System.IO.File]::ReadLines("$JournalFolder\$infile")) {
 			ConvertFrom-Json -InputObject $line | &$find_sessions
 		}
+		# Put "end of file, but not end of session" check here
+		if ($script:started -and -not $script:ended) {
+			Write-Debug "parse_journal START: started = $script:started, ended = $script:ended, last_line = $line"
+			$json = ConvertFrom-Json -InputObject $line
+			$script:end_time = [datetime]::Parse($json.timestamp.ToString())
+			&$end_session
+		}
+		# And then also store $script:last_filename here
+		# so we can check if the next one is an increment
 	} 
 }
 ###########################################################################
