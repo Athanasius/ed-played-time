@@ -51,7 +51,7 @@ $parse_timestamp = {
 		$e
 	)
 	if ($e) {
-		#Write-Host "parse_timestamp: e = $e"
+		Write-Debug "parse_timestamp: e = $e"
 		[datetime]::Parse($e.timestamp.ToString())
 	}
 }
@@ -60,9 +60,26 @@ $parse_timestamp = {
 ###########################################################################
 # Filter to 'start of session' events
 ###########################################################################
-$filter_start_event = {
-	#Write-Host $_
+$filter_start_session = {
+	Write-Debug "filter_start_session: _ = $_"
 	if ($_.event -eq "Location") {
+		return $true
+	}
+	return $false
+}
+###########################################################################
+
+###########################################################################
+# Filter to 'end of session' events
+###########################################################################
+$filter_end_session = {
+	Write-Debug "filter_end_session: _ = $_"
+	if ($_.event -eq "Shutdown") {
+		Write-Debug "Found Shutdown"
+		return $true
+	}
+	if ($_.event -eq "Music" -and $_.MusicTrack -eq "MainMenu") {
+		Write-Debug "Found MainMenu Music"
 		return $true
 	}
 	return $false
@@ -82,17 +99,17 @@ $parse_journal = {
 		$infile
 	)
 	Process {
-		Write-Host "parse_journal $infile"
-		$starttime = Get-Content -Path "$JournalFolder\$infile" | ConvertFrom-Json | Where-Object { &$filter_start_event $_ }| &$parse_timestamp
+		Write-Verbose "parse_journal $infile"
+		$starttime = Get-Content -Path "$JournalFolder\$infile" | ConvertFrom-Json | Where-Object { &$filter_start_session $_ } | &$parse_timestamp
 		if ($starttime) {
-			Write-Host "start: $starttime"
-			#Write-Host "Looking for endtime..."
-			$endtime = Get-Content -Path "$JournalFolder\$infile" -Tail 1 | ConvertFrom-Json | &$parse_timestamp
-			Write-Host "end: $endtime"
+			Write-Verbose "start: $starttime"
+			Write-Debug "Looking for endtime..."
+			$endtime = Get-Content -Path "$JournalFolder\$infile" | ConvertFrom-Json | Where-Object {&$filter_end_session} | &$parse_timestamp
+			Write-Verbose "end: $endtime"
 			$diff = $endtime - $starttime
-			Write-Host "diff: $diff"
+			Write-Verbose "diff: $diff"
 			$total_playedtime += $diff
-			Write-Host "total played now: $total_playedtime"
+			Write-Verbose "total played now: $total_playedtime"
 			$delta = @{
 				TimeStamp = $endtime
 				Played = $diff
@@ -106,8 +123,11 @@ $parse_journal = {
 ###########################################################################
 # MAIN code
 ###########################################################################
+$VerbosePreference = "Continue"
+$DebugPreference = "Continue"
 $total_playedtime = 0
 $SavedGames = [shell32]::GetKnownFolderPath([KnownFolder]::SavedGames)
 $JournalFolder = "$SavedGames\Frontier Developments\Elite Dangerous"
 Get-ChildItem "$JournalFolder" -Filter "Journal.*.*.log" | &$parse_journal | Export-Csv -Path "$JournalFolder\ed-played-time.csv"
+Write-Host "total played: $total_playedtime"
 ###########################################################################
