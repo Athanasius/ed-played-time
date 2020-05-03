@@ -1,12 +1,6 @@
 ###########################################################################
 # PowerShell script to look through current Elite Dangerous 'Journal' files
 # and account apparent playtime.
-#
-# TODO:
-#   Current aim is to just look at timestamps of first and last line in
-#   each Journal file and total up the time deltas.  What we actually need
-#   to do is look at Location (written on login) events and either Shutdown
-#   events or the last line of the file.
 ###########################################################################
 
 ###########################################################################
