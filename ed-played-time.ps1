@@ -49,9 +49,9 @@ Add-Type @"
 ###########################################################################
 
 ###########################################################################
-# Parse Journal timestamp
+# Filter a single session
 ###########################################################################
-$parse_timestamp = {
+$find_sessions = {
 	[cmdletbinding()]
 	param(
 		[parameter(
@@ -60,39 +60,44 @@ $parse_timestamp = {
 		]
 		$e
 	)
-	if ($e) {
-		Write-Debug "parse_timestamp: e = $e"
-		[datetime]::Parse($e.timestamp.ToString())
+	if (! $script:started) {
+		if ($e.event -eq "Location") {
+			Write-Debug "Found Location"
+			$script:start_time = [datetime]::Parse($e.timestamp.ToString())
+			$script:started = $true
+			Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+		}
 	}
-}
-###########################################################################
-
-###########################################################################
-# Filter to 'start of session' events
-###########################################################################
-$filter_start_session = {
-	#Write-Debug "filter_start_session: _ = $_"
-	if ($_.event -eq "Location") {
-		return $true
+	if ($script:started -and -not $script:ended) {
+		Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+		if ($e.event -eq "Shutdown") {
+			Write-Debug "Found Shutdown"
+			$script:end_time = [datetime]::Parse($e.timestamp.ToString())
+			$script:ended = $true
+			Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+		}
+		if ($e.event -eq "Music" -and $_.MusicTrack -eq "MainMenu") {
+			Write-Debug "Found MainMenu Music"
+			$script:end_time = [datetime]::Parse($e.timestamp.ToString())
+			$script:ended = $true
+			Write-Debug "find_sessions START: started = $script:started, ended = $script:ended"
+		}
 	}
-	return $false
-}
-###########################################################################
-
-###########################################################################
-# Filter to 'end of session' events
-###########################################################################
-$filter_end_session = {
-	#Write-Debug "filter_end_session: _ = $_"
-	if ($_.event -eq "Shutdown") {
-		Write-Debug "Found Shutdown"
-		return $true
+	if ($script:started -and $script:ended) {
+		Write-Verbose "start: $script:start_time"
+		Write-Verbose "end: $script:end_time"
+		$diff = $script:end_time - $script:start_time
+		Write-Verbose "diff: $diff"
+		$script:total_playedtime += $diff
+		Write-Verbose "total played now: $script:total_playedtime"
+		$delta = @{
+			TimeStamp = $script:end_time
+			Played = $diff
+		}
+		New-Object PSObject -Property $delta | Write-Output
+		$script:started = $script:ended = $false
 	}
-	if ($_.event -eq "Music" -and $_.MusicTrack -eq "MainMenu") {
-		Write-Debug "Found MainMenu Music"
-		return $true
-	}
-	return $false
+	#Write-Debug "find_sessions END: started = $script:started, ended = $script:ended, e = $e"
 }
 ###########################################################################
 
@@ -110,21 +115,12 @@ $parse_journal = {
 	)
 	Process {
 		Write-Verbose "parse_journal $infile"
-		$starttime = Get-Content -Path "$JournalFolder\$infile" | ConvertFrom-Json | Where-Object { &$filter_start_session $_ } | &$parse_timestamp
-		if ($starttime) {
-			Write-Verbose "start: $starttime"
-			Write-Debug "Looking for endtime..."
-			$endtime = Get-Content -Path "$JournalFolder\$infile" | ConvertFrom-Json | Where-Object {&$filter_end_session} | Select-Object -First 1 | &$parse_timestamp
-			Write-Verbose "end: $endtime"
-			$diff = $endtime - $starttime
-			Write-Verbose "diff: $diff"
-			$total_playedtime += $diff
-			Write-Verbose "total played now: $total_playedtime"
-			$delta = @{
-				TimeStamp = $endtime
-				Played = $diff
-			}
-			New-Object PSObject -Property $delta | Write-Output
+		$script:started = $false
+		$script:start_time = $false
+		$script:ended = $false
+		$script:end_time = $false
+		foreach ($line in [System.IO.File]::ReadLines("$JournalFolder\$infile")) {
+			ConvertFrom-Json -InputObject $line | &$find_sessions
 		}
 	} 
 }
