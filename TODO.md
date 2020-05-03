@@ -9,6 +9,7 @@
 
 
 ### Action Items
+1. Output the found data to a CSV file (in the Journals location).
 1. Use "Location" event as the start time.
 1. Use "Shutdown", "Music" ("MusicTrack":"MainMenu") to detect end of session.
 1. If we find a 'logout' event, start looking for a new 'login' event.
