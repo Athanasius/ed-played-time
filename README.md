@@ -1,3 +1,6 @@
+**This project has been retired (but the live version might still be running).  Please fork and continue work on it if you find it useful.**
+===
+
 # ed-played-time
 A Windows Power Shell script that attempts to total up Elite Dangerous played time
 
